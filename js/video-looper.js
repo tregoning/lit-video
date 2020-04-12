@@ -1,5 +1,5 @@
 import {LitElement, html} from 'lit-element';
-import {classMap} from 'lit-html/directives/class-map.js';
+import {classMap} from 'lit-html/directives/class-map';
 import {debounce} from './tools';
 import {play as playIcon, pause as pauseIcon, locked as lockedIcon, unlocked as unlockedIcon, muted as mutedIcon, sound as soundIcon, fullScreen as fullScreenIcon, exitFullScreen as exitFullScreenIcon} from './icons';
 
@@ -89,6 +89,11 @@ class VideoLooper extends LitElement {
                 position: relative;
                 overflow: hidden;
                 background-color: #000;
+                top:0;
+                right: 0;
+                bottom: 0;
+                left: 0;
+                position: absolute;
             }
 
             video {
@@ -153,11 +158,15 @@ class VideoLooper extends LitElement {
                 fill: var(--white);
                 outline: none;
                 touch-action: manipulation;
-                margin-right: 10px;
             }
-            
+
             button:hover {
                 background: var(--blue);
+            }
+
+            button .icon {
+                position: relative;
+                top: -2px;
             }
 
             #progress-container {
@@ -177,7 +186,8 @@ class VideoLooper extends LitElement {
 
             #controls #volume {
                 width: 70px;
-                --thumb-width: 23px;
+                --thumb-height: 18px;
+                --thumb-width: 18px;
                 --thumb-border-radius: 50%;
             }
 
@@ -196,30 +206,55 @@ class VideoLooper extends LitElement {
         </style>
         <div id="container" @mousemove="${() => this._mouseMoveHandler()}" class="${classMap({'show-controls': this._showControls})}">
             <video
-                autoplay
-                muted
-                loop
-                allowfullscreen
-                src="${this.src}"
+                .autoplay="${this.autoplay}"
+                .muted="${this.muted}"
+                .loop="${this.loop}"
+                .allowfullscreen="${this.allowfullscreen}"
+                .src="${this.src}"
                 .playbackRate="${this.playbackRate}"
                 .volume="${this.volume}"
                 @play="${() => this._videoPlayHandler()}"
                 @pause="${() => this._videoPauseHandler()}"
                 @click="${() => this.togglePlayState()}"
             ></video>
-            <div id="controls" @click="${e => e.stopPropagation()}">
+            <div id="controls" @click="${e => e.stopPropagation()}" @keydown="${e => e.stopPropagation()}">
                 <button @click="${() => this.togglePlayState()}"><span class="icon">${this._getStateIcon()}</span></button>
                 <div id="progress-container">
                     ${this._getHighlightedSection()}
-                    <input id="progress" type="range" min="0" max="100" step="0.01" .value="${this._progressSliderValue}" autocomplete="off" @input="${e => this._progressInputHandler(e)}" @change="${e => this._progressChangeHandler(e)}">
+                    <input
+                        id="progress"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        autocomplete="off"
+                        .value="${this._progressSliderValue}"
+                        @input="${e => this._progressInputHandler(e)}"
+                        @change="${e => this._progressChangeHandler(e)}"
+                        style="--value:${this._progressSliderValue}%"
+                    >
                 </div>
-                <button @click="${() => this._toggleRestrictedMode()}"><span class="icon">${this._getRestrictedIcon()}</span></button>
+                ${this._renderRestrictedModeButton()}
                 <button @click="${() => this._toggleMuteMode()}"><span class="icon">${this._getSoundIcon()}</span></button>
                 <input id="volume" type="range" min="0" max="1" step="0.05" .value="${this._volumeSliderValue}" autocomplete="off" @input="${e => this._volumeInputHandler(e)}">
                 <button @click="${() => this._fullScreenRequest()}"><span class="icon full-screen-icon">${fullScreenIcon}</span><span class="icon exit-full-screen-icon">${exitFullScreenIcon}</span></button>
             </div>
         </div>
         `;
+
+    }
+
+    _renderRestrictedModeButton() {
+
+        let markup;
+
+        if (typeof this.start === 'number' && typeof this.end === 'number') {
+
+            markup = html`<button @click="${() => this._toggleRestrictedMode()}"><span class="icon">${this._getRestrictedIcon()}</span></button>`;
+
+        }
+
+        return markup;
 
     }
 
@@ -246,7 +281,6 @@ class VideoLooper extends LitElement {
 
     _mouseMoveEndedHandler() {
 
-        console.log('_mouseMoveEndedHandler');
         this._showControls = false;
 
     }
@@ -273,7 +307,7 @@ class VideoLooper extends LitElement {
 
         let markup;
 
-        if (this.duration && typeof this.start === 'number' && typeof this.end === 'number') {
+        if (typeof this.start === 'number' && typeof this.end === 'number' && this.duration) {
             const left = (this.start * 100) / this.duration;
             const end = (this.end * 100) / this.duration;
             const width = end - left;
@@ -328,7 +362,7 @@ class VideoLooper extends LitElement {
 
         let markup;
 
-        if (this._state === 'playing') {
+        if (this.paused) {
             markup = playIcon;
         } else {
             markup = pauseIcon;
@@ -340,29 +374,29 @@ class VideoLooper extends LitElement {
 
     togglePlayState() {
 
-        if (this._state === 'playing') {
-            this.pause();
-        } else {
+        if (this.paused) {
             this.play();
+        } else {
+            this.pause();
         }
 
     }
 
     _videoPauseHandler() {
-        this._state = 'pause';
+        this.paused = true;
     }
 
     _videoPlayHandler() {
-        this._state = 'playing';
+        this.paused = false;
     }
 
     play() {
-        this._state = 'playing';
+        this.paused = false;
         this._video.play();
     }
 
     pause() {
-        this._state = 'pause';
+        this.paused = true;
         this._video.pause();
     }
 
@@ -371,11 +405,11 @@ class VideoLooper extends LitElement {
         this._video.currentTime = (parseFloat(e.target.value) * this.duration) / 100;
         this._setProgressSliderValue(e.target.value);
 
-        if (this._previousState === 'playing') {
+        if (this._previousPausedState === false) {
             this.play();
         }
 
-        delete this._previousState;
+        delete this._previousPausedState;
 
     }
 
@@ -387,7 +421,7 @@ class VideoLooper extends LitElement {
 
     _progressInputHandler(e) {
 
-        this._previousState = this._previousState || this._state;
+        this._previousPausedState = this._previousPausedState || this.paused;
         this.pause();
         this._setProgressSliderValue(e.target.value);
 
@@ -413,7 +447,6 @@ class VideoLooper extends LitElement {
 
     _setProgressSliderValue(value) {
 
-        this._progress.style.setProperty('--value', `${value}%`);
         this._progressSliderValue = value;
 
     }
@@ -421,16 +454,7 @@ class VideoLooper extends LitElement {
     constructor() {
 
         super();
-        this.autoplay = false;
-        this.muted = false;
-        this.loop = false;
-        this.allowfullscreen = false;
-        this.controls = false;
-        this.playbackRate = 1;
-        this.volume = 0;
-        this.restricted = true;
-        this._state = 'pause';
-        this._showControls = false;
+        this._resetState();
 
         this._checkProgress = this._checkProgress.bind(this);
         this._mouseMoveEndedHandler = debounce(this._mouseMoveEndedHandler.bind(this), 3000);
@@ -442,15 +466,32 @@ class VideoLooper extends LitElement {
         //@see https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/readyState#Value
         if(this._video.readyState > 0) {
 
-            if (this.restricted && (this._video.currentTime < this.start || this._video.currentTime >= this.end)) {
-                this._video.currentTime = this.start;
-            }
-
             this.duration = this._video.duration;
 
-            if (this._state === 'playing') {
-                this._setProgressSliderValue((this._video.currentTime * 100) / this.duration); //moves the slider's progress track
+            if (typeof this.start === 'number' && typeof this.end === 'number' && this.restricted) {
+
+                if (this._video.currentTime < this.start) {
+
+                    this._video.currentTime = this.start;
+
+                } else if (this._video.currentTime >= this.end) {
+
+                    if (this.loop) {
+
+                        this._video.currentTime = this.start;
+
+                    } else {
+
+                        this.pause();
+                        this._video.currentTime = this.start;
+
+                    }
+
+                }
+
             }
+
+            this._setProgressSliderToCurrentTime();
 
         } else {
 
@@ -459,6 +500,12 @@ class VideoLooper extends LitElement {
         }
 
         window.requestAnimationFrame(this._checkProgress);
+
+    }
+
+    _setProgressSliderToCurrentTime() {
+
+        this._setProgressSliderValue((this._video.currentTime * 100) / this.duration);
 
     }
 
@@ -484,23 +531,39 @@ class VideoLooper extends LitElement {
         super.firstUpdated(_changedProperties);
 
         this._video = this.shadowRoot.querySelector('video');
-        this._progress = this.shadowRoot.querySelector('#progress');
         this._volumeSlider = this.shadowRoot.querySelector('#volume');
         this._container = this.shadowRoot.querySelector('#container');
 
         this._setProgressSliderValue(0);
         this._setVolumeSliderValue(this.volume);
 
-        ['autoplay', 'loop', 'allowfullscreen', 'controls'].forEach(attribute => {
-
-            if (this[attribute] === false) {
-                this._video.removeAttribute(attribute);
-                this._video[attribute] = false;
-            }
-
-        });
-
         window.requestAnimationFrame(this._checkProgress);
+
+    }
+
+    _resetState() {
+
+        this.loop = false;
+        this.playbackRate = 1;
+        this.volume = 1;
+        this.restricted = true;
+        this._showControls = false;
+        this.paused = true;
+
+        this.start = null;
+        this.end = null;
+
+        this.currentTime = 0;
+        this._progressSliderValue = 0;
+        this._state = 'paused';
+        this._volumeSliderValue = 0;
+
+        if (this._video) {
+
+            this._setProgressSliderValue(0);
+            this._setVolumeSliderValue(this.volume);
+
+        }
 
     }
 
@@ -517,10 +580,11 @@ class VideoLooper extends LitElement {
             end: {type: Number},
             playbackRate: {type: Number},
             currentTime: {type: Number},
-            _progressSliderValue: {type: Number},
-            _state: {type: String},
             restricted: {type: Boolean},
             volume: {type: Number},
+            paused: {type: Boolean},
+            _progressSliderValue: {type: Number},
+            _state: {type: String},
             _volumeSliderValue: {type: Number},
             _showControls: {type: Boolean}
         };
